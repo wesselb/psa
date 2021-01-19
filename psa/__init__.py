@@ -1,1 +1,1 @@
-from .core import *
+from .stein import *
