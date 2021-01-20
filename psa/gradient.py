@@ -1,9 +1,10 @@
 import jax
+import jax.numpy as jnp
 import lab.jax as B
 from jax.lax import scan
 from stheno import EQ
 
-__all__ = ["construct_gradient_estimator"]
+__all__ = ["entropy_gradient_estimator"]
 
 
 def _map_sum(f, *xs):
@@ -16,15 +17,15 @@ def _map_sum(f, *xs):
     return res
 
 
-def construct_gradient_estimator(k_x=EQ(), k_y=EQ(), k_ce=EQ()):
+def entropy_gradient_estimator(k_x=EQ(), k_y=EQ(), k_ce=EQ()):
     """Construct the gradient estimator.
 
     Args:
         k_x (:class:`stheno.Kernel`, optional): Kernel for the dependence on the first
             argument. Defaults to the EQ kernel.
-        k_x (:class:`stheno.Kernel`, optional): Kernel for the dependence on the second
+        k_y (:class:`stheno.Kernel`, optional): Kernel for the dependence on the second
             argument. Defaults to the EQ kernel.
-        k_x (:class:`stheno.Kernel`, optional): Kernel for the conditional expectation.
+        k_ce (:class:`stheno.Kernel`, optional): Kernel for the conditional expectation.
             Defaults to the EQ kernel.
 
     Returns:
@@ -71,20 +72,32 @@ def construct_gradient_estimator(k_x=EQ(), k_y=EQ(), k_ce=EQ()):
         return _map_sum(to_map, x, y)
 
     @jax.jit
-    def estimator(x, y, h, h_ce, eta=1e-2):
+    def estimator(x, y, h=None, h_ce=None, eta=1e-2):
         """Gradient estimator.
 
         Args:
             x (matrix): Samples of the argument of the logpdf.
             y (matrix): Samples of the conditional argument of the logpdf.
-            h (float): Length scale for the kernels over the arguments.
-            h_ce (float):  Length scale for the kernel for the conditional expectation.
+            h (float, optional): Length scale for the kernels over the arguments.
+                Defaults to a median-based value.
+            h_ce (float, optional):  Length scale for the kernel for the conditional
+                expectation. Defaults to a median-based value.
             eta (float, optional): L2 regulariser. Defaults to `1e-2`.
 
         Returns:
             tuple[matrix, matrix]: Estimates of the gradients of the conditional logpdf.
 
         """
+        if h is None:
+            med = jnp.median(B.pw_dists2(B.concat(x, y, axis=1)))
+            n = B.shape(x)[1] + B.shape(y)[1]
+            h = B.sqrt(0.5 * med / B.log(n + 1))
+
+        if h_ce is None:
+            med = jnp.median(B.pw_dists2(y))
+            n = B.shape(y)[1]
+            h_ce = B.sqrt(0.5 * med / B.log(n + 1))
+
         chol = B.chol(B.reg(f_x(x, x, h) * f_y(y, y, h), diag=eta))
         return (
             -B.cholsolve(chol, f_dx(x, y, h)),

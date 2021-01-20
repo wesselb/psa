@@ -3,11 +3,11 @@ import jax.numpy as jnp
 import lab.jax as B
 from stheno import Normal
 
-from psa import construct_gradient_estimator
+from psa import entropy_gradient_estimator
 
 
-def test_gradient_estimator():
-    estimator = construct_gradient_estimator()
+def test_entropy_gradient_estimator():
+    estimator = entropy_gradient_estimator()
 
     d = Normal(jnp.array([[1.0, -0.4], [-0.4, 0.8]]))
     x = B.concat(*[d.sample().T for _ in range(1000)], axis=0)
