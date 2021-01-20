@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-requirements = ["numpy>=1.16", "backends", "jax", "jaxlib"]
+requirements = ["numpy>=1.16", "backends", "stheno", "jax", "jaxlib"]
 
 setup(
     packages=find_packages(exclude=["docs"]),
