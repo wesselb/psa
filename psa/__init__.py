@@ -1,1 +1,1 @@
-from .stein import *
+from .gradient import *
