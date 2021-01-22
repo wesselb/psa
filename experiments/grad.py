@@ -1,15 +1,16 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 import lab as B
 import wbml.out as out
 from stheno.input import MultiInput
 from stheno.jax import Measure, GP, EQ, Delta, cross
 from varz.jax import Vars
 
-from psa import psa_kl_estimator
+from psa import psa_kl_estimator, cos_sim
 
 B.epsilon = 1e-6
-B.set_random_seed(1)
+B.set_random_seed(np.random.randint(100))
 B.default_dtype = jnp.float32
 
 # Setting of experiment:
@@ -35,7 +36,8 @@ def model(vs, z):
 
 # Construct PSA estimator.
 vs = Vars(jnp.float32)
-psa_objective = psa_kl_estimator(model, y, m)
+vs.get(B.eye(p), name="basis")
+psa_objective = psa_kl_estimator(model, y, m, h=1.0, h_ce=0.2, eta=1e-2)
 psa_objective(vs)  # Initialise variables.
 
 
@@ -64,11 +66,6 @@ def norm(x):
     return B.sqrt(B.sum(x ** 2))
 
 
-def cos_sim(x, y):
-    """Cosine similarity."""
-    return B.sum(x * y) / norm(x) / norm(y)
-
-
 # Estimate gradient with PSA and true KL.
 grad_psa = grad_basis(psa_objective, vs)
 grad_true = grad_basis(target_objective, vs)
@@ -76,5 +73,5 @@ grad_true = grad_basis(target_objective, vs)
 out.kv("PSA", grad_psa)
 out.kv("True", grad_true)
 out.kv("Diff.", grad_psa - grad_true)
-out.kv("Diff. norm.", grad_psa / norm(grad_psa) - grad_true / norm(grad_true))
+out.kv("Norm. diff.", grad_psa / norm(grad_psa) - grad_true / norm(grad_true))
 out.kv("Cosine sim.", cos_sim(grad_psa, grad_true))

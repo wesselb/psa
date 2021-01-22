@@ -6,10 +6,10 @@ from varz.jax import minimise_adam, Vars
 from varz.spec import parametrised, Positive
 from wbml.plot import tweak
 
-from psa import psa_kl_estimator
+from psa import psa_kl_estimator, pair_signals
 
 B.epsilon = 1e-6
-B.set_random_seed(1)
+B.set_random_seed(0)
 B.default_dtype = jnp.float32
 
 
@@ -40,12 +40,41 @@ def model(
     return logpdf
 
 
-vs = Vars(jnp.float32)
-psa_objective = psa_kl_estimator(model, y, m)
-minimise_adam(psa_objective, vs, iters=200, trace=True, jit=True, rate=5e-2)
+basis_init = Vars(jnp.float32).orthogonal(shape=(p, m), name="basis")
+iters = 500
 
+# Estimate with entropy term.
+vs = Vars(jnp.float32)
+objective = psa_kl_estimator(
+    model, y, m, h=1.0, h_ce=0.2, eta=1e-2, basis_init=basis_init, entropy=True
+)
+minimise_adam(objective, vs, iters=iters, trace=True, jit=True, rate=5e-2)
+basis_psa = vs["basis"]
+
+# Estimate without entropy term.
+vs = Vars(jnp.float32)
+objective = psa_kl_estimator(
+    model, y, m, h=1.0, h_ce=0.2, eta=1e-2, basis_init=basis_init, entropy=False
+)
+minimise_adam(objective, vs, iters=iters, trace=True, jit=True, rate=5e-2)
+basis_mle = vs["basis"]
+
+# Plot PSA result.
+z_est, z_true = pair_signals(y @ basis_psa, z[:, :m])
 plt.figure()
-plt.plot(y @ vs["basis"], label="Estimated", ls="--")
-plt.plot(z[:, :m], label="True", ls="-")
-tweak(legend=True)
+plt.title("With Entropy Term")
+for i in range(m):
+    plt.plot(x, z_est[:, i], ls="--")
+    plt.plot(x, z_true[:, i], ls="-")
+tweak(legend=False)
+
+# Plot MLE result.
+z_est, z_true = pair_signals(y @ basis_mle, z[:, :m])
+plt.figure()
+plt.title("Without Entropy Term")
+for i in range(m):
+    plt.plot(x, z_est[:, i], ls="--")
+    plt.plot(x, z_true[:, i], ls="-")
+tweak(legend=False)
+
 plt.show()
