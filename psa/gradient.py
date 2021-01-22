@@ -4,7 +4,7 @@ import lab.jax as B
 from jax.lax import scan
 from stheno import EQ
 
-__all__ = ["entropy_gradient_estimator"]
+__all__ = ["estimate_scale", "entropy_gradient_estimator"]
 
 
 def _map_sum(f, *xs):
@@ -15,6 +15,24 @@ def _map_sum(f, *xs):
 
     res, _ = scan(scan_f, acc0, tuple(x[1:] for x in xs))
     return res
+
+
+def estimate_scale(x):
+    """Estimate the bandwidth.
+
+    Source:
+        https://github.com/dilinwang820/Stein-Variational-Gradient-Descent
+        /blob/master/python/svgd.py#L12
+
+    Args:
+        x (matrix): Inputs of observations.
+
+    Returns:
+        scalar: Bandwidth.
+    """
+    med = jnp.median(B.pw_dists2(x))
+    n = B.shape(x)[0]
+    return B.sqrt(0.5 * med / B.log(n + 1))
 
 
 def entropy_gradient_estimator(k_x=EQ(), k_y=EQ(), k_ce=EQ()):
@@ -89,14 +107,9 @@ def entropy_gradient_estimator(k_x=EQ(), k_y=EQ(), k_ce=EQ()):
 
         """
         if h is None:
-            med = jnp.median(B.pw_dists2(B.concat(x, y, axis=1)))
-            n = B.shape(x)[1] + B.shape(y)[1]
-            h = B.sqrt(0.5 * med / B.log(n + 1))
-
+            h = estimate_scale(B.concat(x, y, axis=1))
         if h_ce is None:
-            med = jnp.median(B.pw_dists2(y))
-            n = B.shape(y)[1]
-            h_ce = B.sqrt(0.5 * med / B.log(n + 1))
+            h_ce = estimate_scale(y)
 
         chol = B.chol(B.reg(f_x(x, x, h) * f_y(y, y, h), diag=eta))
         return (
