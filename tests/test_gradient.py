@@ -1,3 +1,4 @@
+import pytest
 import jax
 import jax.numpy as jnp
 import lab.jax as B
@@ -6,11 +7,12 @@ from stheno import Normal
 from psa import entropy_gradient_estimator
 
 
-def test_entropy_gradient_estimator():
+@pytest.mark.parametrize("correlation", [-0.4, 0, 0.4])
+def test_entropy_gradient_estimator(correlation):
     estimator = entropy_gradient_estimator()
 
-    d = Normal(jnp.array([[1.0, -0.4], [-0.4, 0.8]]))
-    x = B.concat(*[d.sample().T for _ in range(1000)], axis=0)
+    d = Normal(jnp.array([[1.0, correlation], [correlation, 0.8]]))
+    x = d.sample(1000).T
 
     h = 10
     h_ce = 0.2
@@ -27,6 +29,6 @@ def test_entropy_gradient_estimator():
     true_grads = B.stack(*[true_grad(xi) for xi in x], axis=0)
     est_grads = B.concat(*estimator(x[:, 0:1], x[:, 1:2], h, h_ce), axis=1)
 
-    # Assert that the MAE for both is less than 0.1.
+    # Assert that the MAE for both is less than 0.2.
     mae = max(B.mean(B.abs(true_grads - est_grads), axis=0))
-    assert mae < 0.1
+    assert mae < 0.2
