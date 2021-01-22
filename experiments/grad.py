@@ -6,9 +6,13 @@ import wbml.out as out
 from stheno.input import MultiInput
 from stheno.jax import Measure, GP, EQ, Delta, cross
 from varz.jax import Vars
+from wbml.experiment import WorkingDirectory
 
 from psa import psa_kl_estimator, cos_sim
 
+# Initialise experiment.
+wd = WorkingDirectory("_experiments", "grad")
+out.report_time = True
 B.epsilon = 1e-6
 B.set_random_seed(np.random.randint(100))
 B.default_dtype = jnp.float32

@@ -19,3 +19,6 @@ cover
 # Other
 .DS_Store
 *.swp
+
+# Results
+_experiments
