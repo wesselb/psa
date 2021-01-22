@@ -36,7 +36,7 @@ def model(
 
 vs = Vars(jnp.float32)
 
-# Initialise to a bad basis
+# Initialise to a bad basis.
 vs.orthogonal((B.eye(10) - h @ h.T)[:, :2], name="h")
 
 minimise_adam(
