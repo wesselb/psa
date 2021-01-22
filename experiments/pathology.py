@@ -11,7 +11,7 @@ from wbml.plot import tweak
 from psa import psa_kl_estimator, pair_signals
 
 # Initialise experiment.
-wd = WorkingDirectory("_experiments", "toy")
+wd = WorkingDirectory("_experiments", "pathology")
 out.report_time = True
 B.epsilon = 1e-6
 B.default_dtype = jnp.float32
