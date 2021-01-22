@@ -51,7 +51,11 @@ def pair_signals(x, y):
         y_matched.append(y_left[y_left_i])
 
     # Returns matched signals as columns.
-    return B.transpose(x[x_matched]), B.transpose(y[y_matched])
+    x, y = B.transpose(x[x_matched]), B.transpose(y[y_matched])
+
+    # Sort by magnitudes of `y`.
+    perm = np.argsort(B.sum(y ** 2, axis=0))
+    return x[:, perm], y[:, perm]
 
 
 def psa_kl_estimator(

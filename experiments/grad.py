@@ -14,7 +14,6 @@ from psa import psa_kl_estimator, cos_sim
 wd = WorkingDirectory("_experiments", "grad")
 out.report_time = True
 B.epsilon = 1e-6
-B.set_random_seed(np.random.randint(100))
 B.default_dtype = jnp.float32
 
 # Setting of experiment:

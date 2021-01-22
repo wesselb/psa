@@ -1,12 +1,12 @@
 import jax.numpy as jnp
 import lab as B
 import matplotlib.pyplot as plt
-from stheno.jax import Measure, GP, EQ, Delta
+import wbml.out as out
+from stheno.jax import GP, EQ, Delta
 from varz.jax import minimise_adam, Vars
 from varz.spec import parametrised, Positive
-from wbml.plot import tweak
-import wbml.out as out
 from wbml.experiment import WorkingDirectory
+from wbml.plot import tweak
 
 from psa import psa_kl_estimator, pair_signals
 
@@ -14,19 +14,16 @@ from psa import psa_kl_estimator, pair_signals
 wd = WorkingDirectory("_experiments", "toy")
 out.report_time = True
 B.epsilon = 1e-6
-B.set_random_seed(0)
 B.default_dtype = jnp.float32
 
-
-x = B.linspace(0, 10, 200)
+x = B.linspace(0, 10, 250)
 m = 2
 p = 4
 true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
 
-prior = Measure()
-z_model = [GP(0.5 * EQ() + 0.5 * Delta(), measure=prior) for _ in range(m)]
-z_model += [GP(Delta(), measure=prior) for _ in range(p - m)]
-z = B.concat(*prior.sample(*[p(x) for p in z_model]), axis=1)
+z_model = [GP(0.95 * EQ() + 0.05 * Delta()) for _ in range(m)]
+z_model += [GP(Delta()) for _ in range(p - m)]
+z = B.concat(*[p(x).sample() for p in z_model], axis=1)
 y = z @ true_basis.T
 
 
