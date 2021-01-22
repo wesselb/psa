@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import numpy as np
 import lab as B
 import wbml.out as out
 from stheno.input import MultiInput
@@ -17,14 +16,14 @@ B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
 # Setting of experiment:
-x = B.linspace(0, 10, 500)
+x = B.linspace(0, 10, 1000)
 m = 2
 p = 4
 true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
 
 # Build a model for the data.
 prior = Measure()
-z_model = [GP(0.95 * EQ() + 0.05 * Delta(), measure=prior) for _ in range(m)]
+z_model = [GP(0.5 * EQ() + 0.5 * Delta(), measure=prior) for _ in range(m)]
 z_model += [GP(Delta(), measure=prior) for _ in range(p - m)]
 y_model = [sum([true_basis[j, i] * z_model[i] for i in range(p)], 0) for j in range(p)]
 
@@ -39,8 +38,7 @@ def model(vs, z):
 
 # Construct PSA estimator.
 vs = Vars(jnp.float32)
-vs.get(B.eye(p), name="basis")
-psa_objective = psa_kl_estimator(model, y, m, h=1.0, h_ce=0.2, eta=1e-2)
+psa_objective = psa_kl_estimator(model, y, m, h=1.0, h_ce=0.2)
 psa_objective(vs)  # Initialise variables.
 
 
