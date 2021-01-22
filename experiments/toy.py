@@ -16,13 +16,13 @@ out.report_time = True
 B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
-x = B.linspace(0, 10, 250)
+x = B.linspace(0, 10, 500)
 m = 2
 p = 4
 true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
 
 z_model = [GP(0.95 * EQ() + 0.05 * Delta()) for _ in range(m)]
-z_model += [GP(Delta()) for _ in range(p - m)]
+z_model += [GP(0.05 * Delta()) for _ in range(p - m)]
 z = B.concat(*[p(x).sample() for p in z_model], axis=1)
 y = z @ true_basis.T
 
@@ -42,13 +42,21 @@ def model(
     return logpdf
 
 
-basis_init = Vars(jnp.float32).orthogonal(shape=(p, m), name="basis")
-iters = 2000
+basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
+iters = 500
 
 # Estimate with entropy term.
 vs = Vars(jnp.float32)
 objective = psa_kl_estimator(
-    model, y, m, h=1.0, h_ce=0.2, eta=1e-2, basis_init=basis_init, entropy=True
+    model,
+    y,
+    m,
+    h=1.0,
+    h_ce=0.2,
+    eta=1e-2,
+    basis_init=basis_init,
+    entropy=True,
+    orthogonal=False,
 )
 minimise_adam(objective, vs, iters=iters, trace=True, jit=True, rate=5e-2)
 basis_psa = vs["basis"]
@@ -56,7 +64,15 @@ basis_psa = vs["basis"]
 # Estimate without entropy term.
 vs = Vars(jnp.float32)
 objective = psa_kl_estimator(
-    model, y, m, h=1.0, h_ce=0.2, eta=1e-2, basis_init=basis_init, entropy=False
+    model,
+    y,
+    m,
+    h=1.0,
+    h_ce=0.2,
+    eta=1e-2,
+    basis_init=basis_init,
+    entropy=False,
+    orthogonal=False,
 )
 minimise_adam(objective, vs, iters=iters, trace=True, jit=True, rate=5e-2)
 basis_mle = vs["basis"]
