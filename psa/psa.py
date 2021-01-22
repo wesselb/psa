@@ -24,7 +24,7 @@ def psa_kl_estimator(model_loglik, y, m, orthogonal=True):
     def kl(vs):
         # Construct the basis.
         if orthogonal:
-            get_h = vs.orthonal
+            get_h = vs.orthogonal
         else:
             get_h = vs.get
         h = get_h(shape=(B.shape(y)[1], m), name="h")
