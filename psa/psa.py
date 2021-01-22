@@ -40,7 +40,7 @@ def psa_kl_estimator(model_loglik, y, m, orthogonal=True, h=None, h_ce=None, eta
         # Compute proxy objective for the entropy.
         x_no_grad = stop_gradient(x)
         g1, g2 = estimator(x_no_grad[1:], x_no_grad[:-1], h, h_ce, eta)
-        entropy_proxy = B.sum(g1 * x[1:]) + B.sum(g2 * x[:-1])
+        entropy_proxy = -B.sum(g1 * x[1:]) - B.sum(g2 * x[:-1])
 
         # Assemble KL.
         return -entropy_proxy - model_loglik(vs, x)
