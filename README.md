@@ -7,11 +7,30 @@
 
 Predictable subspace analysis
 
-## Installation
+## User Installation With `pip`
 
 See [the instructions here](https://gist.github.com/wesselb/4b44bf87f3789425f96e26c4308d0adc).
 Then simply
 
-```
+```bash
 pip install psa
+```
+
+## Repo Installation Without `pip`
+
+See [the instructions here](https://gist.github.com/wesselb/4b44bf87f3789425f96e26c4308d0adc).
+
+Then clone and enter the repo.
+
+```bash
+git clone https://github.com/wesselb/psa
+cd psa
+```
+
+Finally, make a virtual environment and install the requirements.
+
+```bash
+virtualenv -p python3 venv
+source venv/bin/activate
+pip install -r requirements.txt -e .
 ```
