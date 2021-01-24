@@ -4,51 +4,46 @@ import lab as B
 import matplotlib.pyplot as plt
 import wbml.out as out
 from psa import psa, pair_signals
-from stheno.jax import GP, EQ, Delta
+from stheno.jax import GP, Matern32, Delta
 from varz.jax import Vars
 from varz.spec import parametrised, Positive
 from wbml.experiment import WorkingDirectory
 from wbml.plot import tweak
+from wbml.data.eeg import load
 
 # Initialise experiment.
-wd = WorkingDirectory("_experiments", "pathology")
+wd = WorkingDirectory("_experiments", "eeg")
 out.report_time = True
 B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
-# Settings of experiment:
-x = B.linspace(0, 10, 1000)
-m = 2
-p = 4
+# Load data.
+data = load()[0]
 
-markov = 3
+# Settings of experiment:
+x = jnp.array(data.index)
+y = jnp.array(data)
+m = 3
+p = data.shape[1]
+
+orthogonal = True
+markov = 1
 h_x = 1.0
 h_y = 1.0
 h_ce = 0.2
-
-out.kv("h_x", h_x)
-out.kv("h_y", h_y)
-out.kv("h_ce", h_ce)
-
-# Sample some data.
-true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
-z_model = [GP(EQ() + 1e-2 * Delta()) for _ in range(m)]
-z_model += [GP(0.1 * Delta()) for _ in range(p - m)]
-z = B.concat(*[p(x).sample() for p in z_model], axis=1)
-y = z @ true_basis.T
 
 
 @parametrised
 def model(
     vs,
     z,
-    variances: Positive = 0.5 * B.ones(m),
-    scales: Positive = 1 * B.ones(m),
-    noises: Positive = 0.5 * B.ones(m),
+    variances: Positive = 1 * B.ones(m),
+    scales: Positive = np.array([0.1, 0.05, 0.01]),
+    noises: Positive = 1e-2 * B.ones(m),
 ):
     logpdf = 0
     for i in range(m):
-        kernel = variances[i] * EQ().stretch(scales[i]) + noises[i] * Delta()
+        kernel = variances[i] * Matern32().stretch(scales[i]) + noises[i] * Delta()
         logpdf += GP(kernel)(x).logpdf(z[:, i])
     return logpdf
 
@@ -74,7 +69,7 @@ basis_psa = psa(
     h_ce=h_ce,
     basis_init=basis_init,
     entropy=True,
-    orthogonal=False,
+    orthogonal=orthogonal,
 )
 
 # Estimate with unconditional entropy term.
@@ -93,7 +88,7 @@ basis_psa_uc = psa(
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
-    orthogonal=False,
+    orthogonal=orthogonal,
 )
 
 # Estimate without entropy term.
@@ -110,7 +105,7 @@ basis_mle = psa(
     h_y=h_y,
     basis_init=basis_init,
     entropy=False,
-    orthogonal=False,
+    orthogonal=orthogonal,
 )
 
 out.kv("Basis PSA", basis_psa)
@@ -121,31 +116,28 @@ out.kv("Diff.", basis_psa - basis_mle)
 plt.figure(figsize=(12, 4))
 
 # Plot PSA result.
-z_est, z_true = pair_signals(y @ basis_psa, z[:, :m])
+z_est = y @ basis_psa
 plt.subplot(1, 3, 1)
 plt.title("With Conditional Entropy Term")
 cmap = plt.get_cmap("tab10")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
-    plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
 tweak(legend=False)
 
 # Plot PSA result.
-z_est, z_true = pair_signals(y @ basis_psa_uc, z[:, :m])
+z_est = y @ basis_psa_uc
 plt.subplot(1, 3, 2)
 plt.title("With Unconditional Entropy Term")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
-    plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
 tweak(legend=False)
 
 # Plot MLE result.
-z_est, z_true = pair_signals(y @ basis_mle, z[:, :m])
+z_est = y @ basis_mle
 plt.subplot(1, 3, 3)
 plt.title("Without Entropy Term")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
-    plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
 tweak(legend=False)
 
 plt.savefig(wd.file("result.png"))

@@ -17,7 +17,7 @@ B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
 # Settings of experiment:
-x = B.linspace(0, 10, 300)
+x = B.linspace(0, 10, 500)
 m = 2
 p = 4
 
@@ -34,7 +34,7 @@ sims_m3 = []
 sims_uc = []
 
 
-for i in range(10):
+for i in range(100):
     out.kv("Rep.", i + 1)
 
     # Sample a true basis.
@@ -42,7 +42,7 @@ for i in range(10):
 
     # Build a model for the data.
     prior = Measure()
-    z_model = [GP(EQ() + 0.1 * Delta(), measure=prior) for _ in range(m)]
+    z_model = [GP(EQ() + 0.2 * Delta(), measure=prior) for _ in range(m)]
     z_model += [GP(Delta(), measure=prior) for _ in range(p - m)]
     y_model = [
         sum([true_basis[j, i] * z_model[i] for i in range(p)], 0) for j in range(p)
@@ -140,7 +140,17 @@ for i in range(10):
     sims_m1.append(cos_sim(grad_psa_m1, grad_true))
     sims_uc.append(cos_sim(grad_psa_uc, grad_true))
 
+
+def report(name, x):
+    with out.Section(name):
+        out.kv("Mean", np.mean(x))
+        out.kv("Error", 1.96 * np.std(x) / np.sqrt(len(x)))
+        out.kv("Lower error bound", np.mean(x) - 1.96 * np.std(x) / np.sqrt(len(x)))
+        out.kv("Upper error bound", np.mean(x) + 1.96 * np.std(x) / np.sqrt(len(x)))
+
+
 # Report averages.
-out.kv("Avg. cosine sim. (M3)", np.mean(sims_m3))
-out.kv("Avg. cosine sim. (M1)", np.mean(sims_m1))
-out.kv("Avg. cosine sim. (UC)", np.mean(sims_uc))
+with out.Section("Average cosine similarities"):
+    report("M3", sims_m3)
+    report("M1", sims_m1)
+    report("UC", sims_uc)
