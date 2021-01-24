@@ -27,5 +27,7 @@ def test_entropy_gradient_estimator_correlated_gaussian(n, min_cos_sim, correlat
         return conditional.logpdf(x[0])
 
     true_grads = B.stack(*[true_grad(xi) for xi in x], axis=0)
-    est_grads = B.concat(*estimator(x[:, 0:1], x[:, 1:2], 1, 0.2), axis=1)
+    est_grads = B.concat(
+        *estimator(x[:, 0:1], x[:, 1:2], h_x=1, h_y=1, h_ce=0.2), axis=1
+    )
     assert cos_sim(true_grads, est_grads) > min_cos_sim
