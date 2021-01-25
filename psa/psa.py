@@ -109,6 +109,7 @@ def psa(
     Returns
         matrix: Estimated basis.
     """
+
     def kl(vs):
         # Construct the basis.
         if orthogonal:
