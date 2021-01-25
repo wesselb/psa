@@ -1,17 +1,17 @@
-import numpy as np
 import jax.numpy as jnp
 import lab as B
 import matplotlib.pyplot as plt
 import wbml.out as out
-from psa import psa, pair_signals
 from stheno.jax import GP, EQ, Delta
 from varz.jax import Vars
 from varz.spec import parametrised, Positive
 from wbml.experiment import WorkingDirectory
 from wbml.plot import tweak
 
+from psa import psa, pair_signals
+
 # Initialise experiment.
-wd = WorkingDirectory("_experiments", "pathology")
+wd = WorkingDirectory("_experiments", "pathology", seed=1)
 out.report_time = True
 B.epsilon = 1e-6
 B.default_dtype = jnp.float32
@@ -20,19 +20,14 @@ B.default_dtype = jnp.float32
 x = B.linspace(0, 10, 1000)
 m = 2
 p = 4
-
-markov = 3
-h_x = 1.0
-h_y = 1.0
-h_ce = 0.2
-
-out.kv("h_x", h_x)
-out.kv("h_y", h_y)
-out.kv("h_ce", h_ce)
+markov = 1
+h = 1.0
+rate = 5e-2
+iters = 500
 
 # Sample some data.
 true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
-z_model = [GP(EQ() + 1e-2 * Delta()) for _ in range(m)]
+z_model = [GP(EQ() + 0.01 * Delta()) for _ in range(m)]
 z_model += [GP(0.1 * Delta()) for _ in range(p - m)]
 z = B.concat(*[p(x).sample() for p in z_model], axis=1)
 y = z @ true_basis.T
@@ -43,7 +38,7 @@ def model(
     vs,
     z,
     variances: Positive = 0.5 * B.ones(m),
-    scales: Positive = 1 * B.ones(m),
+    scales: Positive = B.ones(m),
     noises: Positive = 0.5 * B.ones(m),
 ):
     logpdf = 0
@@ -54,9 +49,6 @@ def model(
 
 
 basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
-rate = 5e-2
-iters = 1000
-batch_size = 100
 
 # Estimate with entropy term.
 vs = Vars(jnp.float32)
@@ -65,13 +57,10 @@ basis_psa = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
-    batch_size=batch_size,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
-    h_ce=h_ce,
     basis_init=basis_init,
     entropy=True,
     orthogonal=False,
@@ -84,12 +73,10 @@ basis_psa_uc = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
-    h_ce=h_ce,
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
@@ -103,11 +90,10 @@ basis_mle = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
     basis_init=basis_init,
     entropy=False,
     orthogonal=False,

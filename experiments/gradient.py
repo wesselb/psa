@@ -17,33 +17,26 @@ B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
 # Settings of experiment:
-x = B.linspace(0, 10, 500)
+x = B.linspace(0, 10, 1000)
 m = 2
 p = 4
-
-h_x = 1.0
-h_y = 1.0
-h_ce = 0.2
-
-out.kv("h_x", h_x)
-out.kv("h_y", h_y)
-out.kv("h_ce", h_ce)
+h = 1.5
 
 sims_m1 = []
 sims_m3 = []
 sims_uc = []
 
 
-for i in range(100):
-    out.kv("Rep.", i + 1)
+for i in range(30):
+    out.kv("Repetition", i + 1)
 
     # Sample a true basis.
     true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
 
     # Build a model for the data.
     prior = Measure()
-    z_model = [GP(EQ() + 0.2 * Delta(), measure=prior) for _ in range(m)]
-    z_model += [GP(Delta(), measure=prior) for _ in range(p - m)]
+    z_model = [GP(EQ() + 0.05 * Delta(), measure=prior) for _ in range(m)]
+    z_model += [GP(0.1 * Delta(), measure=prior) for _ in range(p - m)]
     y_model = [
         sum([true_basis[j, i] * z_model[i] for i in range(p)], 0) for j in range(p)
     ]
@@ -63,11 +56,9 @@ for i in range(100):
         vs,
         y,
         m,
+        h,
         markov=3,
-        h_x=h_x,
-        h_y=h_y,
-        h_ce=h_ce,
-        return_kl_estimator=True,
+        kl_estimator=True,
     )
     kl_m3_estimator(vs)  # Initialise variables.
 
@@ -77,11 +68,9 @@ for i in range(100):
         vs,
         y,
         m,
+        h,
         markov=1,
-        h_x=h_x,
-        h_y=h_y,
-        h_ce=h_ce,
-        return_kl_estimator=True,
+        kl_estimator=True,
     )
     kl_m1_estimator(vs)  # Initialise variables.
 
@@ -91,9 +80,9 @@ for i in range(100):
         vs,
         y,
         m,
-        h_x=h_x,
+        h,
         entropy_conditional=False,
-        return_kl_estimator=True,
+        kl_estimator=True,
     )
     kl_uc_estimator(vs)  # Initialise variables.
 
@@ -104,7 +93,7 @@ for i in range(100):
             sum([basis[i, j] * y_model[i] for i in range(p)], 0) for j in range(m)
         ]
         entropy = cross(*z_model)(MultiInput(*[p(x) for p in z_model])).entropy()
-        return -entropy - model(vs, y @ basis)
+        return (-entropy - model(vs, y @ basis)) / m / B.shape(y)[1]
 
     def grad_basis(f, vs):
         """Compute the gradient with respect to the basis for an estimator."""

@@ -1,15 +1,16 @@
-import numpy as np
 import jax.numpy as jnp
 import lab as B
 import matplotlib.pyplot as plt
+import numpy as np
 import wbml.out as out
-from psa import psa, pair_signals
 from stheno.jax import GP, Matern32, Delta
 from varz.jax import Vars
 from varz.spec import parametrised, Positive
+from wbml.data.eeg import load
 from wbml.experiment import WorkingDirectory
 from wbml.plot import tweak
-from wbml.data.eeg import load
+
+from psa import psa
 
 # Initialise experiment.
 wd = WorkingDirectory("_experiments", "eeg")
@@ -26,11 +27,13 @@ y = jnp.array(data)
 m = 3
 p = data.shape[1]
 
-orthogonal = True
 markov = 1
-h_x = 1.0
-h_y = 1.0
-h_ce = 0.2
+h = 1.0
+
+orthogonal = True
+
+rate = 5e-2
+iters = 1000
 
 
 @parametrised
@@ -49,9 +52,6 @@ def model(
 
 
 basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
-rate = 5e-2
-iters = 1000
-batch_size = 100
 
 # Estimate with entropy term.
 vs = Vars(jnp.float32)
@@ -60,13 +60,10 @@ basis_psa = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
-    batch_size=batch_size,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
-    h_ce=h_ce,
     basis_init=basis_init,
     entropy=True,
     orthogonal=orthogonal,
@@ -79,12 +76,10 @@ basis_psa_uc = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
-    h_ce=h_ce,
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
@@ -98,11 +93,10 @@ basis_mle = psa(
     vs,
     y,
     m,
+    h,
     iters=iters,
     rate=rate,
     markov=markov,
-    h_x=h_x,
-    h_y=h_y,
     basis_init=basis_init,
     entropy=False,
     orthogonal=orthogonal,
