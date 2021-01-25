@@ -6,7 +6,7 @@ import wbml.out as out
 from jax.lax import stop_gradient
 from varz import ADAM
 
-from .gradient import entropy_gradient_estimator
+from .stein import stein, stein_conditional
 
 __all__ = ["pair_signals", "psa"]
 
@@ -74,19 +74,16 @@ def psa(
     vs,
     y,
     m,
+    h,
+    eta=1e-2,
     iters=500,
     rate=5e-2,
-    batch_size=None,
-    return_kl_estimator=False,
+    kl_estimator=False,
     orthogonal=True,
     entropy=True,
     entropy_conditional=True,
     basis_init=None,
     markov=1,
-    h_x=None,
-    h_y=None,
-    h_ce=None,
-    eta=1e-2,
 ):
     """Perform predictable subspace analysis (PSA).
 
@@ -96,35 +93,23 @@ def psa(
         vs (:class:`varz.Vars`): Variable container.
         y (matrix): Data.
         m (int): Number of components.
+        h (float): Length scale for the kernel.
+        eta (float, optional): L2 regulariser. Defaults to `1e-2`.
         iters (int, optional): Number of optimisation iterations. Defaults to `500`.
         rate (float, optional): Learning rate. Defaults to `5e-2`.
-        batch_size (int, optional): Batch size. Defaults to not batching at all.
-        return_kl_estimator (bool, optional): Return the KL estimator instead of
-            performing the optimisation. Defaults to `False`.
+        kl_estimator (bool, optional): Return the KL estimator instead of performing
+            the optimisation. Defaults to `False`.
         orthogonal (bool, optional): Use an orthogonal basis. Defaults to `True`.
         entropy (bool, optional): Estimate the entropy. Defaults to `True`.
         entropy_conditional (bool, optional): Estimate the entropy of the conditional
             densities. Defaults to `True`.
         basis_init (matrix, optional): Initialisation for the basis.
         markov (int, optional): Order of Markov assumption. Defaults to `1`.
-        h_x (float, optional): Length scale for the kernel over `x`. Defaults to a
-            median-based estimate.
-        h_y (float, optional): Length scale for the kernel over `y`. Defaults to a
-            median-based estimate.
-        h_ce (float, optional):  Length scale for the kernel for the conditional
-            expectation. Defaults to a median-based estimate.
-        eta (float, optional): L2 regulariser. Defaults to `1e-2`.
 
     Returns
         matrix: Estimated basis.
     """
-    estimator = entropy_gradient_estimator()
-
-    def kl(vs, subsample_inds=None):
-        # Default to not batching at all.
-        if subsample_inds is None:
-            subsample_inds = jnp.arange(B.shape(y)[0])
-
+    def kl(vs):
         # Construct the basis.
         if orthogonal:
             get_basis = vs.orthogonal
@@ -137,46 +122,40 @@ def psa(
 
         if entropy:
             # Compute proxy objective for the entropy.
-            splits = [x[i : B.shape(x)[0] - markov + i, :] for i in range(markov)]
+            splits = [x[i : B.shape(x)[0] - markov + i] for i in range(markov)]
             x_condition = B.concat(*splits, axis=1)
             if entropy_conditional:
-                g1, g2 = estimator(
-                    stop_gradient(x[markov:]),
-                    stop_gradient(x_condition),
-                    subsample_inds=subsample_inds,
-                    h_x=h_x,
-                    h_y=h_y,
-                    h_ce=h_ce,
-                    eta=eta,
+                g1, g2 = stein_conditional(
+                    stop_gradient(x[markov:]), stop_gradient(x_condition), h=h, eta=eta
                 )
                 entropy_proxy = -B.sum(g1 * x[markov:]) - B.sum(g2 * x_condition)
             else:
-                g = estimator(stop_gradient(x), h=h_x, eta=eta)
+                g = stein(stop_gradient(x), h=h, eta=eta)
                 entropy_proxy = -B.sum(g * x)
 
             # Assemble KL.
-            return -entropy_proxy - model_loglik(vs, x)
+            return (-entropy_proxy - model_loglik(vs, x)) / m / B.shape(y)[1]
         else:
             # Not using the entropy term.
-            return -model_loglik(vs, x)
+            return -model_loglik(vs, x) / m / B.shape(y)[1]
 
     # See if we just require the KL estimator.
-    if return_kl_estimator:
+    if kl_estimator:
         return kl
 
     # Vectorise parameters of objective.
-    kl(vs, _sample_batch_indices(y, batch_size))  # Initialise variables.
+    kl(vs)  # Initialise variables.
     x = vs.get_vector()  # Initialise vector packer.
     vs_copy = vs.copy()  # Copy variable container for differentiable assignment.
 
-    def f_vectorised(x, subsample_inds):
+    def f_vectorised(x):
         vs_copy.set_vector(x)
-        return kl(vs_copy, subsample_inds)
+        return kl(vs_copy)
 
     f_value_and_grad = jax.jit(jax.value_and_grad(f_vectorised))
 
     def f_value_and_grad_subsampled(x):
-        return f_value_and_grad(x, _sample_batch_indices(y, batch_size))
+        return f_value_and_grad(x)
 
     # Perform optimisation.
     adam = ADAM(rate)
