@@ -11,19 +11,20 @@ from wbml.plot import tweak
 from psa import psa, pair_signals
 
 # Initialise experiment.
-wd = WorkingDirectory("_experiments", "pathology", seed=1)
+wd = WorkingDirectory("_experiments", "pathology")
 out.report_time = True
 B.epsilon = 1e-6
 B.default_dtype = jnp.float32
 
 # Settings of experiment:
-x = B.linspace(0, 10, 1000)
+x = B.linspace(0, 10, 500)
 m = 2
 p = 4
 markov = 1
 h = 1.0
 rate = 5e-2
-iters = 500
+iters = 2000
+orthogonal = True
 
 # Sample some data.
 true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
@@ -63,7 +64,8 @@ basis_psa = psa(
     markov=markov,
     basis_init=basis_init,
     entropy=True,
-    orthogonal=False,
+    entropy_conditional=True,
+    orthogonal=orthogonal,
 )
 
 # Estimate with unconditional entropy term.
@@ -80,7 +82,7 @@ basis_psa_uc = psa(
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
-    orthogonal=False,
+    orthogonal=orthogonal,
 )
 
 # Estimate without entropy term.
@@ -96,7 +98,7 @@ basis_mle = psa(
     markov=markov,
     basis_init=basis_init,
     entropy=False,
-    orthogonal=False,
+    orthogonal=orthogonal,
 )
 
 out.kv("Basis PSA", basis_psa)
