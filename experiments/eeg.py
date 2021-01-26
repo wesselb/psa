@@ -26,14 +26,12 @@ x = jnp.array(data.index)
 y = jnp.array(data)
 m = 3
 p = data.shape[1]
-
-markov = 1
 h = 1.0
 
-orthogonal = True
+orthogonal = False
 
-rate = 5e-2
-iters = 1000
+rate = 1e-2
+iters = 2000
 
 
 @parametrised
@@ -41,7 +39,7 @@ def model(
     vs,
     z,
     variances: Positive = 1 * B.ones(m),
-    scales: Positive = np.array([0.1, 0.05, 0.01]),
+    scales: Positive = np.array([0.5, 0.1, 0.05]),
     noises: Positive = 1e-2 * B.ones(m),
 ):
     logpdf = 0
@@ -54,32 +52,28 @@ def model(
 basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
 
 # Estimate with entropy term.
-vs = Vars(jnp.float32)
 basis_psa = psa(
     model,
-    vs,
+    Vars(jnp.float32),
     y,
     m,
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=True,
     orthogonal=orthogonal,
 )
 
 # Estimate with unconditional entropy term.
-vs = Vars(jnp.float32)
 basis_psa_uc = psa(
     model,
-    vs,
+    Vars(jnp.float32),
     y,
     m,
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
@@ -87,16 +81,14 @@ basis_psa_uc = psa(
 )
 
 # Estimate without entropy term.
-vs = Vars(jnp.float32)
 basis_mle = psa(
     model,
-    vs,
+    Vars(jnp.float32),
     y,
     m,
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=False,
     orthogonal=orthogonal,
