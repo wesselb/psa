@@ -5,7 +5,7 @@ import numpy as np
 import wbml.out as out
 from stheno.jax import GP, Matern32, Delta
 from varz.jax import Vars
-from varz.spec import parametrised, Positive
+from varz.spec import parametrised, Positive, Unbounded
 from wbml.data.eeg import load
 from wbml.experiment import WorkingDirectory
 from wbml.plot import tweak
@@ -38,6 +38,7 @@ iters = 2000
 def model(
     vs,
     z,
+    means: Unbounded(shape=(m,)),
     variances: Positive = 1 * B.ones(m),
     scales: Positive = np.array([0.5, 0.1, 0.05]),
     noises: Positive = 1e-2 * B.ones(m),
@@ -45,7 +46,7 @@ def model(
     logpdf = 0
     for i in range(m):
         kernel = variances[i] * Matern32().stretch(scales[i]) + noises[i] * Delta()
-        logpdf += GP(kernel)(x).logpdf(z[:, i])
+        logpdf += GP(means[i], kernel)(x).logpdf(z[:, i])
     return logpdf
 
 
