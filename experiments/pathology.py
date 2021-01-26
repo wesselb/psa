@@ -1,3 +1,5 @@
+import sys
+
 import jax.numpy as jnp
 import lab as B
 import matplotlib.pyplot as plt
@@ -10,26 +12,33 @@ from wbml.plot import tweak
 
 from psa import psa, pair_signals
 
+# Get seed from command line settings.
+if len(sys.argv) > 1:
+    seed = int(sys.argv[1])
+else:
+    seed = 0
+
 # Initialise experiment.
-wd = WorkingDirectory("_experiments", "pathology")
+wd = WorkingDirectory("_experiments", "pathology", f"{seed}", seed=seed)
 out.report_time = True
-B.epsilon = 1e-6
+B.epsilon = 1e-5
 B.default_dtype = jnp.float32
 
 # Settings of experiment:
-x = B.linspace(0, 10, 500)
+x = B.linspace(0, 20, 1000)
 m = 2
-p = 4
-markov = 1
+p = 10
 h = 1.0
-rate = 5e-2
-iters = 2000
-orthogonal = True
+rate = 1e-2
+kernels = [EQ(), EQ()]
+noise = 0.01
+iters = 1000
+orthogonal = False
 
-# Sample some data.
-true_basis = Vars(jnp.float32).orthogonal(shape=(p, p))
-z_model = [GP(EQ() + 0.01 * Delta()) for _ in range(m)]
-z_model += [GP(0.1 * Delta()) for _ in range(p - m)]
+# Define a true model and sample some data.
+true_basis = Vars(jnp.float32).get(shape=(p, p))
+z_model = [GP(kernels[i] + noise * Delta()) for i in range(m)]
+z_model += [GP(Delta()) for _ in range(p - m)]
 z = B.concat(*[p(x).sample() for p in z_model], axis=1)
 y = z @ true_basis.T
 
@@ -38,15 +47,17 @@ y = z @ true_basis.T
 def model(
     vs,
     z,
-    variances: Positive = 0.5 * B.ones(m),
+    variances: Positive = B.ones(m),
     scales: Positive = B.ones(m),
-    noises: Positive = 0.5 * B.ones(m),
+    noises: Positive = B.ones(m),
 ):
-    logpdf = 0
-    for i in range(m):
-        kernel = variances[i] * EQ().stretch(scales[i]) + noises[i] * Delta()
-        logpdf += GP(kernel)(x).logpdf(z[:, i])
-    return logpdf
+    model_kernels = [
+        variances[i] * kernels[i].stretch(scales[i]) + noises[i] * Delta()
+        for i in range(m)
+    ]
+    return sum(
+        [GP(kernel)(x).logpdf(z[:, i]) for i, kernel in enumerate(model_kernels)]
+    )
 
 
 basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
@@ -61,7 +72,6 @@ basis_psa = psa(
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=True,
@@ -78,7 +88,6 @@ basis_psa_uc = psa(
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=True,
     entropy_conditional=False,
@@ -95,7 +104,6 @@ basis_mle = psa(
     h,
     iters=iters,
     rate=rate,
-    markov=markov,
     basis_init=basis_init,
     entropy=False,
     orthogonal=orthogonal,
@@ -111,17 +119,17 @@ plt.figure(figsize=(12, 4))
 # Plot PSA result.
 z_est, z_true = pair_signals(y @ basis_psa, z[:, :m])
 plt.subplot(1, 3, 1)
-plt.title("With Conditional Entropy Term")
+plt.title("PSA")
 cmap = plt.get_cmap("tab10")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
     plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
 tweak(legend=False)
 
-# Plot PSA result.
+# Plot UC PSA result.
 z_est, z_true = pair_signals(y @ basis_psa_uc, z[:, :m])
 plt.subplot(1, 3, 2)
-plt.title("With Unconditional Entropy Term")
+plt.title("PSA (UC)")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
     plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
@@ -130,7 +138,7 @@ tweak(legend=False)
 # Plot MLE result.
 z_est, z_true = pair_signals(y @ basis_mle, z[:, :m])
 plt.subplot(1, 3, 3)
-plt.title("Without Entropy Term")
+plt.title("MLE")
 for i in range(m):
     plt.plot(x, z_est[:, i], c=cmap(i))
     plt.plot(x, z_true[:, i], alpha=0.5, c=cmap(i))
