@@ -6,9 +6,9 @@ import wbml.out as out
 from jax.lax import stop_gradient
 from varz import ADAM
 
-from .stein import stein, stein_conditional
+from .stein import stein, stein_conditional, stein_nystrom, stein_conditional_nystrom
 
-__all__ = ["pair_signals", "psa"]
+__all__ = ["pair_signals", "psa", "psa_nystrom"]
 
 
 def pair_signals(x, y):
@@ -132,6 +132,113 @@ def psa(
                 entropy_proxy = -B.sum(g1 * x[markov:]) - B.sum(g2 * x_condition)
             else:
                 g = stein(stop_gradient(x), h=h, eta=eta)
+                entropy_proxy = -B.sum(g * x)
+
+            # Assemble KL.
+            return (-entropy_proxy - model_loglik(vs, x)) / m / B.shape(y)[1]
+        else:
+            # Not using the entropy term.
+            return -model_loglik(vs, x) / m / B.shape(y)[1]
+
+    # See if we just require the KL estimator.
+    if kl_estimator:
+        return kl
+
+    # Vectorise parameters of objective.
+    kl(vs)  # Initialise variables.
+    x = vs.get_vector()  # Initialise vector packer.
+    vs_copy = vs.copy()  # Copy variable container for differentiable assignment.
+
+    def f_vectorised(x):
+        vs_copy.set_vector(x)
+        return kl(vs_copy)
+
+    f_value_and_grad = jax.jit(jax.value_and_grad(f_vectorised))
+
+    def f_value_and_grad_subsampled(x):
+        return f_value_and_grad(x)
+
+    # Perform optimisation.
+    adam = ADAM(rate)
+    with out.Progress("Fitting PSA", total=iters) as progress:
+        for i in range(iters):
+            obj_value, grad = B.to_numpy(f_value_and_grad_subsampled(x))
+            progress({"Objective value": obj_value})
+            x = adam.step(x, grad)
+    vs.set_vector(x)
+
+    # The result of PSA is the learned basis.
+    return vs["basis"]
+
+# Duplicating functions just so I avoid using `if`s because of JAX
+def psa_nystrom(
+    model_loglik,
+    vs,
+    y,
+    m,
+    h,
+    n_samples,
+    m_nyst,
+    eta=1e-2,
+    iters=500,
+    rate=5e-2,
+    kl_estimator=False,
+    orthogonal=True,
+    entropy=True,
+    entropy_conditional=True,
+    basis_init=None,
+    markov=1,
+):
+    """Perform predictable subspace analysis (PSA) using the Nyström approximation.
+
+    Args:
+        model_loglik (function): Function that takes in a variable container and the
+            projected data and computes the likelihood under the model.
+        vs (:class:`varz.Vars`): Variable container.
+        y (matrix): Data.
+        m (int): Number of components.
+        h (float): Length scale for the kernel.
+        n_samples (int): Number of samples to be used to approximate the kernel.
+        m_nyst (int): Rank of the kernel approximation. Must be smaller than n_samples.
+        eta (float, optional): L2 regulariser. Defaults to `1e-2`.
+        iters (int, optional): Number of optimisation iterations. Defaults to `500`.
+        rate (float, optional): Learning rate. Defaults to `5e-2`.
+        kl_estimator (bool, optional): Return the KL estimator instead of performing
+            the optimisation. Defaults to `False`.
+        orthogonal (bool, optional): Use an orthogonal basis. Defaults to `True`.
+        entropy (bool, optional): Estimate the entropy. Defaults to `True`.
+        entropy_conditional (bool, optional): Estimate the entropy of the conditional
+            densities. Defaults to `True`.
+        basis_init (matrix, optional): Initialisation for the basis.
+        markov (int, optional): Order of Markov assumption. Defaults to `1`.
+
+    Returns
+        matrix: Estimated basis.
+    """
+
+    def kl(vs):
+        # Construct the basis.
+        if orthogonal:
+            get_basis = vs.orthogonal
+        else:
+            get_basis = vs.get
+        basis = get_basis(init=basis_init, shape=(B.shape(y)[1], m), name="basis")
+
+        # Perform projection.
+        x = y @ basis
+
+        if entropy:
+            # Compute proxy objective for the entropy.
+            splits = [x[i : B.shape(x)[0] - markov + i] for i in range(markov)]
+            x_condition = B.concat(*splits, axis=1)
+            if entropy_conditional:
+                g1, g2 = stein_conditional_nystrom(
+                    stop_gradient(x[markov:]), stop_gradient(x_condition), h, 
+                    n_samples, m_nyst, eta=eta
+                )
+                entropy_proxy = -B.sum(g1 * x[markov:]) - B.sum(g2 * x_condition)
+            else:
+                g = stein_nystrom(stop_gradient(x), h, n_samples, m_nyst, eta=eta)
                 entropy_proxy = -B.sum(g * x)
 
             # Assemble KL.
