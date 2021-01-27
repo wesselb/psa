@@ -30,7 +30,8 @@ def test_entropy_gradient_estimator_correlated_gaussian(
         return conditional.logpdf(x[0])
 
     if nystrom:
-        inducing_inds = np.arange(n)
+        # Use one fewer data point.
+        inducing_inds = np.arange(n - 1)
     else:
         inducing_inds = None
 
