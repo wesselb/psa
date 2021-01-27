@@ -10,7 +10,7 @@ from psa import cos_sim, stein_conditional
 
 
 @pytest.mark.parametrize(
-    "n, min_cos_sim", [(100, 0.4), (250, 0.55), (750, 0.7), (1500, 0.8)]
+    "n, min_cos_sim", [(100, 0.4), (250, 0.55), (750, 0.7), (2000, 0.8)]
 )
 @pytest.mark.parametrize("correlation", [-0.4, 0, 0.4])
 @pytest.mark.parametrize("nystrom", [True, False])
