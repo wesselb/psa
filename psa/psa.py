@@ -74,7 +74,7 @@ def psa(
     vs,
     y,
     m,
-    h,
+    h=None,
     eta=1e-2,
     batch_size=None,
     iters=500,
@@ -94,7 +94,8 @@ def psa(
         vs (:class:`varz.Vars`): Variable container.
         y (matrix): Data.
         m (int): Number of components.
-        h (float): Length scale for the kernel.
+        h (float, optional): Length scale for the kernel. Defaults to using
+            :func:`.stein.estimate_scale`.
         eta (float, optional): L2 regulariser. Defaults to `1e-2`.
         batch_size (int, optional): Number of data points to subsample for the
             Nystrom approximation. Defaults to not using the Nystrom approximation.
