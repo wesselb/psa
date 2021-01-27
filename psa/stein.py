@@ -1,8 +1,6 @@
-import jax.numpy as jnp
 import jax
 import lab.jax as B
-from matrix import LowRank, Diagonal
-
+from matrix import LowRank
 
 __all__ = ["stein", "stein_conditional"]
 
