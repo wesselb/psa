@@ -232,13 +232,17 @@ def psa_nystrom(
             splits = [x[i : B.shape(x)[0] - markov + i] for i in range(markov)]
             x_condition = B.concat(*splits, axis=1)
             if entropy_conditional:
-                g1, g2 = stein_conditional_nystrom(
+                jitted = jax.jit(stein_conditional_nystrom, static_argnums=(3, 4))
+                # g1, g2 = stein_conditional_nystrom(
+                g1, g2 = jitted(
                     stop_gradient(x[markov:]), stop_gradient(x_condition), h, 
                     n_samples, m_nyst, eta=eta
                 )
                 entropy_proxy = -B.sum(g1 * x[markov:]) - B.sum(g2 * x_condition)
             else:
-                g = stein_nystrom(stop_gradient(x), h, n_samples, m_nyst, eta=eta)
+                jitted = jax.jit(stein_nystrom, static_argnums=(2, 3))
+                # g = stein_nystrom(stop_gradient(x), h, n_samples, m_nyst, eta=eta)
+                g = jitted(stop_gradient(x), h, n_samples, m_nyst, eta=eta)
                 entropy_proxy = -B.sum(g * x)
 
             # Assemble KL.

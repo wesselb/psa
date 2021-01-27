@@ -21,34 +21,35 @@ def _nystrom_k(x, h, n_samples, m, eta=1e-2):  # m is the rank of the approx.
     perm = rnd.permutation(key, x)
 
     # This is likely a terrible way of doing dynamic indexing, but I don't know a better one
-    def slice_1(M, i):
-        return M[:i, :]
+    # def slice_1(M, i):
+    #     return M[:i, :]
 
-    def slice_2(M, i):
-        return M[i:, :]
+    # def slice_2(M, i):
+    #     return M[i:, :]
 
-    def slice_3(M, i):
-        return M[:, :i]
+    # def slice_3(M, i):
+    #     return M[:, :i]
 
-    def slice_4(v, i):
-        return v[:i]
+    # def slice_4(v, i):
+    #     return v[:i]
 
-    # samples = perm[:n_samples, :] # randomly draw m samples
-    samples = jax.jit(slice_1, static_argnums=(1,))(perm, n_samples) # randomly draw m samples
+    samples = perm[:n_samples, :] # randomly draw m samples
+    # samples = jax.jit(slice_1, static_argnums=(0,))(perm, n_samples) # randomly draw m samples
 
     lr_gram = B.exp(-0.5 * B.pw_dists2(samples) / h ** 2) # Build low-rank Gram
 
     U, S, V = B.svd(B.reg(lr_gram, diag=eta)) 
 
-    rest = jax.jit(slice_2, static_argnums=(1,))(perm, n_samples)
-    gram_offd = B.exp(-0.5 * B.pw_dists2(rest, samples) / h ** 2)
+    # rest = jax.jit(slice_2, static_argnums=(0,))(perm, n_samples)
+    # gram_offd = B.exp(-0.5 * B.pw_dists2(rest, samples) / h ** 2)
+    gram_offd = B.exp(-0.5 * B.pw_dists2(perm[n_samples:, :], samples) / h ** 2)
 
-    Um = jax.jit(slice_3, static_argnums=(1,))(U, m)
-    Sm = jax.jit(slice_4, static_argnums=(1,))(S, M)
-    # U_ = B.sqrt(n_samples / len(x)) * gram_offd @ U[:, :m] / S[:m]
-    # S_ = len(x) / n_samples * S[:m]
-    U_ = B.sqrt(n_samples / len(x)) * gram_offd @ Um / Sm
-    S_ = len(x) / n_samples * Sm
+    # Um = jax.jit(slice_3, static_argnums=(0,))(U, m)
+    # Sm = jax.jit(slice_4, static_argnums=(0,))(S, M)
+    U_ = B.sqrt(n_samples / len(x)) * gram_offd @ U[:, :m] / S[:m]
+    S_ = len(x) / n_samples * S[:m]
+    # U_ = B.sqrt(n_samples / len(x)) * gram_offd @ Um / Sm
+    # S_ = len(x) / n_samples * Sm
 
     def dk(i):
         xi = x[:, i]
@@ -89,7 +90,9 @@ def stein_nystrom(x, h, n_samples, m, eta=1e-2):
     Returns:
         matrix: Estimate of the gradients of `log p(x)` with respect to `x`.
     """
-    U, S, dk = _nystrom_k(x, h, n_samples, m, eta=eta)
+    jitted = jax.jit(_nystrom_k, static_argnums=(2, 3))
+    # U, S, dk = _nystrom_k(x, h, n_samples, m, eta=eta)
+    U, S, dk = jitted(x, h, n_samples, m, eta=eta)
     chol = U @ B.sqrt(S)
     inds = range(B.shape(x)[1])  # Get gradient w.r.t. all dimensions.
     return -B.cholsolve(chol, B.stack(*[B.sum(dk(i), axis=1) for i in inds], axis=1))

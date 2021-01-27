@@ -10,7 +10,7 @@ from wbml.data.eeg import load
 from wbml.experiment import WorkingDirectory
 from wbml.plot import tweak
 
-from psa import psa
+from psa import psa, psa_nystrom
 
 # Initialise experiment.
 wd = WorkingDirectory("_experiments", "eeg")
@@ -27,6 +27,8 @@ y = jnp.array(data)
 m = 3
 p = data.shape[1]
 h = 1.0
+n_samples = data.shape[0] // 2
+m_nyst = data.shape[0] // 20
 
 orthogonal = False
 
@@ -51,6 +53,22 @@ def model(
 
 
 basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
+
+# Estimate with entropy term and Nyström approx.
+basis_psa_nyst = psa_nystrom(
+    model,
+    Vars(jnp.float32),
+    y,
+    m,
+    h,
+    n_samples,
+    m_nyst,
+    iters=iters,
+    rate=rate,
+    basis_init=basis_init,
+    entropy=True,
+    orthogonal=orthogonal,
+)
 
 # Estimate with entropy term.
 basis_psa = psa(
