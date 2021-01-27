@@ -15,23 +15,20 @@ from psa import psa
 # Initialise experiment.
 wd = WorkingDirectory("_experiments", "eeg")
 out.report_time = True
-B.epsilon = 1e-6
-B.default_dtype = jnp.float32
 
 # Load data.
 data = load()[0]
+x = jnp.array(data.index, dtype=jnp.float64)
+y = jnp.array(data, dtype=jnp.float64)
+p = data.shape[1]
 
 # Settings of experiment:
-x = jnp.array(data.index)
-y = jnp.array(data)
+B.default_dtype = jnp.float64
 m = 3
-p = data.shape[1]
-h = 1.0
-
+h = None
 orthogonal = False
-
-rate = 1e-2
-iters = 2000
+rate = 5e-2
+iters = 1000
 
 
 @parametrised
@@ -50,12 +47,12 @@ def model(
     return logpdf
 
 
-basis_init = Vars(jnp.float32).orthogonal(shape=(p, m))
+basis_init = Vars(B.default_dtype).orthogonal(shape=(p, m))
 
 # Estimate with entropy term.
 basis_psa = psa(
     model,
-    Vars(jnp.float32),
+    Vars(B.default_dtype),
     y,
     m,
     h,
@@ -69,7 +66,7 @@ basis_psa = psa(
 # Estimate with unconditional entropy term.
 basis_psa_uc = psa(
     model,
-    Vars(jnp.float32),
+    Vars(B.default_dtype),
     y,
     m,
     h,
@@ -84,7 +81,7 @@ basis_psa_uc = psa(
 # Estimate without entropy term.
 basis_mle = psa(
     model,
-    Vars(jnp.float32),
+    Vars(B.default_dtype),
     y,
     m,
     h,
