@@ -76,6 +76,7 @@ def psa(
     m,
     h,
     eta=1e-2,
+    batch_size=None,
     iters=500,
     rate=5e-2,
     kl_estimator=False,
@@ -95,6 +96,8 @@ def psa(
         m (int): Number of components.
         h (float): Length scale for the kernel.
         eta (float, optional): L2 regulariser. Defaults to `1e-2`.
+        batch_size (int, optional): Number of data points to subsample for the
+            Nystrom approximation. Defaults to not using the Nystrom approximation.
         iters (int, optional): Number of optimisation iterations. Defaults to `500`.
         rate (float, optional): Learning rate. Defaults to `5e-2`.
         kl_estimator (bool, optional): Return the KL estimator instead of performing
@@ -110,7 +113,7 @@ def psa(
         matrix: Estimated basis.
     """
 
-    def kl(vs):
+    def kl(vs, inducing_inds):
         # Construct the basis.
         if orthogonal:
             get_basis = vs.orthogonal
@@ -127,11 +130,15 @@ def psa(
             x_condition = B.concat(*splits, axis=1)
             if entropy_conditional:
                 g1, g2 = stein_conditional(
-                    stop_gradient(x[markov:]), stop_gradient(x_condition), h=h, eta=eta
+                    stop_gradient(x[markov:]),
+                    stop_gradient(x_condition),
+                    h=h,
+                    eta=eta,
+                    inducing_inds=inducing_inds,
                 )
                 entropy_proxy = -B.sum(g1 * x[markov:]) - B.sum(g2 * x_condition)
             else:
-                g = stein(stop_gradient(x), h=h, eta=eta)
+                g = stein(stop_gradient(x), h=h, eta=eta, inducing_inds=inducing_inds)
                 entropy_proxy = -B.sum(g * x)
 
             # Assemble KL.
@@ -145,18 +152,23 @@ def psa(
         return kl
 
     # Vectorise parameters of objective.
-    kl(vs)  # Initialise variables.
+    kl(vs, None)  # Initialise variables.
     x = vs.get_vector()  # Initialise vector packer.
     vs_copy = vs.copy()  # Copy variable container for differentiable assignment.
 
-    def f_vectorised(x):
+    def f_vectorised(x, inducing_inds):
         vs_copy.set_vector(x)
-        return kl(vs_copy)
+        return kl(vs_copy, inducing_inds)
 
     f_value_and_grad = jax.jit(jax.value_and_grad(f_vectorised))
 
     def f_value_and_grad_subsampled(x):
-        return f_value_and_grad(x)
+        if batch_size:
+            inducing_inds = np.random.permutation(B.shape(y)[0])[:batch_size]
+            inducing_inds = np.sort(inducing_inds)
+        else:
+            inducing_inds = None
+        return f_value_and_grad(x, inducing_inds)
 
     # Perform optimisation.
     adam = ADAM(rate)
