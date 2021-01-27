@@ -17,7 +17,6 @@ from psa import cos_sim, stein_conditional
 def test_entropy_gradient_estimator_correlated_gaussian(
     n, min_cos_sim, correlation, nystrom
 ):
-
     d = Normal(jnp.array([[1.0, correlation], [correlation, 0.8]]))
     x = d.sample(n).T
 
@@ -37,7 +36,10 @@ def test_entropy_gradient_estimator_correlated_gaussian(
 
     true_grads = B.stack(*[true_grad(xi) for xi in x], axis=0)
     est_grads = B.concat(
-        *stein_conditional(x[:, 0:1], x[:, 1:2], inducing_inds=inducing_inds), axis=1
+        *stein_conditional(
+            x[:, 0:1], x[:, 1:2], h=1.0, h_joint=1.0, inducing_inds=inducing_inds
+        ),
+        axis=1
     )
 
     assert cos_sim(true_grads, est_grads) > min_cos_sim
