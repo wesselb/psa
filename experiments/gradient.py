@@ -14,20 +14,18 @@ from psa import psa, cos_sim
 # Initialise experiment.
 wd = WorkingDirectory("_experiments", "gradient")
 out.report_time = True
-B.epsilon = 1e-5
-B.default_dtype = jnp.float32
 
 # Settings of experiment:
+B.default_dtype = jnp.float64
 x = B.linspace(0, 20, 1000)
 m = 2
 p = 4
-h = 1.0
-# More noise makes the conditional estimator less useful!
-noise = 0.05
+h = None
+noise = 0.05  # More noise makes the conditional estimator less useful!
 
+# Save results.
 sims_m1 = []
 sims_uc = []
-
 mse_m1 = []
 mse_uc = []
 
@@ -36,7 +34,7 @@ for i in range(100):
     out.kv("Repetition", i + 1)
 
     # Sample a true basis.
-    true_basis = Vars(jnp.float32).get(shape=(p, p))
+    true_basis = Vars(B.default_dtype).get(shape=(p, p))
 
     # Build a model for the data.
     prior = Measure()
@@ -53,7 +51,7 @@ for i in range(100):
         """No model. Just check the entropy estimator."""
         return 0
 
-    vs = Vars(jnp.float32)
+    vs = Vars(B.default_dtype)
     vs.get(shape=(p, m), name="basis")  # Initialise to random basis.
 
     # Construct PSA estimator.
@@ -106,8 +104,8 @@ for i in range(100):
         return B.mean((x - y) ** 2) / B.mean(y ** 2)
 
     # Estimate gradient with PSA and true KL.
-    grad_psa_m1 = grad_basis(kl_m1_estimator, vs)
-    grad_psa_uc = grad_basis(kl_uc_estimator, vs)
+    grad_psa_m1 = grad_basis(lambda vs_: kl_m1_estimator(vs_, None), vs)
+    grad_psa_uc = grad_basis(lambda vs_: kl_uc_estimator(vs_, None), vs)
     grad_true = grad_basis(kl_true, vs)
 
     # Report results.
@@ -127,21 +125,22 @@ for i in range(100):
 
 
 # Report average results.
-out.kv("Mean cos. sim. (M1)", np.mean(sims_m1))
-out.kv("Mean cos. sim. (UC)", np.mean(sims_uc))
-with out.Section("Difference in cosine similarity"):
-    diffs = np.array(sims_m1) - np.array(sims_uc)
-    out.kv("Mean", np.mean(diffs))
-    out.kv(
-        "Lower confidence bound",
-        np.mean(diffs) - 1.96 * np.std(diffs) / np.sqrt(len(diffs)),
-    )
-out.kv("Mean MSE (M1)", np.mean(mse_m1))
-out.kv("Mean MSE (UC)", np.mean(mse_uc))
-with out.Section("Difference in MSE"):
-    diffs = np.array(mse_m1) - np.array(mse_uc)
-    out.kv("Mean", np.mean(diffs))
-    out.kv(
-        "Upper confidence bound",
-        np.mean(diffs) + 1.96 * np.std(diffs) / np.sqrt(len(diffs)),
-    )
+with out.Section("Averages"):
+    out.kv("Mean cos. sim. (M1)", np.mean(sims_m1))
+    out.kv("Mean cos. sim. (UC)", np.mean(sims_uc))
+    with out.Section("Difference in cosine similarity"):
+        diffs = np.array(sims_m1) - np.array(sims_uc)
+        out.kv("Mean", np.mean(diffs))
+        out.kv(
+            "Lower confidence bound",
+            np.mean(diffs) - 1.96 * np.std(diffs) / np.sqrt(len(diffs)),
+        )
+    out.kv("Mean MSE (M1)", np.mean(mse_m1))
+    out.kv("Mean MSE (UC)", np.mean(mse_uc))
+    with out.Section("Difference in MSE"):
+        diffs = np.array(mse_m1) - np.array(mse_uc)
+        out.kv("Mean", np.mean(diffs))
+        out.kv(
+            "Upper confidence bound",
+            np.mean(diffs) + 1.96 * np.std(diffs) / np.sqrt(len(diffs)),
+        )
